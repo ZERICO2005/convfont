@@ -1,6 +1,7 @@
 # Dead-simple makefile for Linux building
-CC=gcc
-CFLAGS=-I. -Wall
+CC = gcc
+CFLAGS = -I. -O2 -Wall -Wextra
+
 # The MS Windows SDK doesn't have getopt, but Linux/Unix does, so we're not including it on Linux
 #DEPS = convfont.h getopt.h parse_fnt.h serialize_font.h
 DEPS = convfont.h parse_fnt.h parse_text.h serialize_font.h
@@ -28,4 +29,3 @@ $(EXECUTABLE): $(OBJ)
 
 clean:
 	$(call RM,*.o $(EXECUTABLE))
-
