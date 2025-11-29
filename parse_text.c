@@ -446,7 +446,7 @@ static void init_parser(parser_state_t *state, FILE *file, char encoding) {
         else
             ERROR("BOM-like bytes not valid.");
         NEXT_THROW(c2, "Out of bytes in header.");
-        if (ini = (c2 == '['))
+        if ((ini = (c2 == '[')))
             NEXT_THROW(c2, "Out of bytes in header.");
         if (tolower(c2) != 'c')
             ERROR("File does not start with \"convfont\".");
@@ -462,7 +462,7 @@ static void init_parser(parser_state_t *state, FILE *file, char encoding) {
         else
             ERROR("File starts with UTF-8 BOM, but different encoding requested.");
         NEXT_THROW(c2, "Out of bytes in header.");
-        if (ini = (c2 == '['))
+        if ((ini = (c2 == '[')))
             NEXT_THROW(c2, "Out of bytes in header.");
         if (tolower(c2) != 'c')
             ERROR("File does not start with \"convfont\".");
@@ -470,7 +470,7 @@ static void init_parser(parser_state_t *state, FILE *file, char encoding) {
     } else {
         /* Detect UTF-16 without BOM. */
         if (c2 == '\0' && (tolower(c) == 'c' || c == '[')) {
-            if (ini = (c == '[')) {
+            if ((ini = (c == '['))) {
                 NEXT_RAW_THROW(c, "Out of bytes in header.");
                 NEXT_RAW_THROW(c2, "Out of bytes in header.");
                 if (tolower(c) != 'c')
@@ -483,7 +483,7 @@ static void init_parser(parser_state_t *state, FILE *file, char encoding) {
             else
                 ERROR("File does not start with \"convfont\".");
         } else if (c == '\0' && (tolower(c2) == 'c' || c2 == '[')) {
-            if (ini = (c2 == '[')) {
+            if ((ini = (c2 == '['))) {
                 NEXT_RAW_THROW(c, "Out of bytes in header.");
                 NEXT_RAW_THROW(c2, "Out of bytes in header.");
                 if (c != '\0')
@@ -497,7 +497,7 @@ static void init_parser(parser_state_t *state, FILE *file, char encoding) {
                 ERROR("File does not start with \"convfont\".");
         } else if (tolower(c) == 'c' || c == '[') {
             /* Assume UTF-8. */
-            if (ini = (c == '[')) {
+            if ((ini = (c == '['))) {
                 NEXT_RAW_THROW(c, "Out of bytes in header.");
                 if (tolower(c) != 'c')
                     ERROR("File does not start with \"convfont\".");
@@ -509,8 +509,8 @@ static void init_parser(parser_state_t *state, FILE *file, char encoding) {
             ERROR("File does not start with \"convfont\".");
     }
     /* Detect rest of header. */
-    char eader[] = "onvfont";
-    for (int i = 0; i < sizeof(eader) - 1; i++) {
+    const char eader[] = "onvfont";
+    for (size_t i = 0; i < sizeof(eader) - 1; i++) {
         NEXT_THROW(c, "Out of bytes in header.");
         if (eader[i] != tolower(c))
             ERROR("File does not start with \"convfont\".");
@@ -532,7 +532,8 @@ static void init_parser(parser_state_t *state, FILE *file, char encoding) {
  * Returns EOF if no characters can be read because the file is done.
  */
 static int get_next_line(parser_state_t *state) {
-    int c;
+    /* suppress -Wmaybe-uninitialized */
+    int c = EOF;
     int len = MAX_LINE_LENGTH;
     state->line_number++;
     state->line_pos = 0;
@@ -666,6 +667,7 @@ static int get_number(parser_state_t *state, char **str) {
     switch (c) {
         case '\'':
             next = '\'';
+            __attribute__((fallthrough));
         case '\"': /* Intentional fall-through */
             c = *++string;
             if (c == '\0' || c == '\n' || (c == '\'' && next == '\'') || (c == '\"' && next != '\''))
@@ -708,6 +710,7 @@ static int get_number(parser_state_t *state, char **str) {
                         NEXT_HEX_DIGIT(*string++);
                         NEXT_HEX_DIGIT(*string++);
                         c = *string++;
+                        __attribute__((fallthrough));
                     case 'u': /* Intentional fall-through */
                         NEXT_HEX_DIGIT(c);
                         NEXT_HEX_DIGIT(*string++);
@@ -726,8 +729,10 @@ static int get_number(parser_state_t *state, char **str) {
                 GET_NUMBER_RETURN(i);
             ERROR("Invalid char literal.");
         case 'U': case 'u':
-            if (*++string != '+')
+            if (*++string != '+') {
                 ERROR("Invalid Unicode identifier.");
+            }
+            __attribute__((fallthrough));
         case '$': /* Intentional fall-through */
             while ((c = dehexify(*++string)) < 16)
                 i = (i << 4) | c;
@@ -741,8 +746,10 @@ static int get_number(parser_state_t *state, char **str) {
                 while ((c = dehexify(*++string)) < 16)
                     i = (i << 4) | c;
                 GET_NUMBER_RETURN(i);
-            } else if (c < '0' || c > '9')
+            } else if (c < '0' || c > '9') {
                 GET_NUMBER_RETURN(0);
+            }
+            __attribute__((fallthrough));
         case '1': case '2': case '3': case '4': /* Intentional fall-through */
         case '5': case '6': case '7': case '8': case '9':
             do {
@@ -891,7 +898,7 @@ fontlib_font_t *parse_text(FILE *in_file, char encoding) {
     int r;
 
     init_parser(state, in_file, encoding);
-    
+
     /* Process header/metadata. */
     do {
         /* Read a line and ignore empty lines, comments, and whitespace. */
@@ -1044,11 +1051,13 @@ fontlib_font_t *parse_text(FILE *in_file, char encoding) {
         do {
             r = get_next_line(state);
             str = eat_whitespace(state->line);
-            if (r == EOF && (state_var.line_len == 0 || *eat_whitespace(state_var.line) == '\0'))
-                if (got_tags)
+            if (r == EOF && (state_var.line_len == 0 || *eat_whitespace(state_var.line) == '\0')) {
+                if (got_tags) {
                     ERROR("Unexpected end of file.");
-                else
+                } else {
                     goto file_done;
+                }
+            }
             if (*str == ':' || *str == '#' || *str == '\0')
                 continue;
             CHECK_FOR_ERROR(r);
